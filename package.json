@@ -1,0 +1,10 @@
+{
+    "name": "1announce",
+    "version": "1.0.0",
+    "description": "A great bot",
+    "main": "bot.js",
+    "author": "Group A",
+    "dependencies": {
+        "discord.io": "https://github.com/woor/discord.io/tarball/gateway_v6"
+    }
+}
