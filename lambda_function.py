@@ -1,55 +1,53 @@
-import json
+import json, os
+import requests
+from dotenv import load_dotenv
+import boto3
 
-from nacl.signing import VerifyKey
-from nacl.exceptions import BadSignatureError
+load_dotenv()
+WEBHOOK_URL = os.environ['WEBHOOK_URL']
 
-PUBLIC_KEY = '0ab34f71459fb2943d9d68b4530b3daf0caa75be604b63b7acf7b419087c81b0' # found on Discord Application -> General Information page
-PING_PONG = {"type": 1}
-RESPONSE_TYPES =  { 
-                    "PONG": 1, 
-                    "ACK_NO_SOURCE": 2, 
-                    "MESSAGE_NO_SOURCE": 3, 
-                    "MESSAGE_WITH_SOURCE": 4, 
-                    "ACK_WITH_SOURCE": 5
-                  }
+# Message { text: string, attachments: Attachment[] }
+# Attachment { filename: string, base64: string }
+def send_message(message):
+    # formats message -> data
+    headers = { "Content-Type": "application/json" }
+    data = { "content": message["text"] }
+    json_data = json.dumps(data)
+    response = requests.post(WEBHOOK_URL, headers=headers, data=json_data)
+    print(response)
 
+def send_announcement(announcement):
+    for message in announcement: send_message(message)
 
-def verify_signature(event):
-    raw_body = event.get("rawBody")
-    auth_sig = event['params']['header'].get('x-signature-ed25519')
-    auth_ts  = event['params']['header'].get('x-signature-timestamp')
+# Clean Up
+def delete_rule(id):
+    print("Deleting Rule ID", id)
+    client = boto3.client('events')
     
-    message = auth_ts.encode() + raw_body.encode()
-    verify_key = VerifyKey(bytes.fromhex(PUBLIC_KEY))
-    verify_key.verify(message, bytes.fromhex(auth_sig)) # raises an error if unequal
-
-def ping_pong(body):
-    if body.get("type") == 1:
-        return True
-    return False
+    rule_targets = client.list_targets_by_rule(Rule=id)['Targets']
+    target_ids = [target['Id'] for target in rule_targets]
     
+    remove_targets_response = client.remove_targets(Rule=id, Ids=target_ids)
+    print(remove_targets_response)
+    
+    delete_rule_response = client.delete_rule(Name=id)
+    print(delete_rule_response)
+
+# Entry Point
+# Triggered by EventBridge Rule
 def lambda_handler(event, context):
-    print(f"event {event}") # debug print
-    # verify the signature
-    try:
-        verify_signature(event)
-    except Exception as e:
-        raise Exception(f"[UNAUTHORIZED] Invalid request signature: {e}")
-
-
-    # check if message is a ping
-    body = event.get('body-json')
-    if ping_pong(body):
-        return PING_PONG
+    print("Event: ", event)
+    print("Context: ", context)
     
+    if event is None:
+        print("Event is empty")    
+        return
     
-    # dummy return
-    return {
-            "type": RESPONSE_TYPES['MESSAGE_NO_SOURCE'],
-            "data": {
-                "tts": False,
-                "content": "BEEP BOOP",
-                "embeds": [],
-                "allowed_mentions": []
-            }
-        }
+    if "announcement" not in event or "id" not in event:
+        print("Event missing required keys `announcement` and/or `id`")
+        return
+
+    send_announcement(event["announcement"])
+    delete_rule(event["id"])
+
+    return "Hello from 1Announce Discord Lambda ✨"
