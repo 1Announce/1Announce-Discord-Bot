@@ -4,6 +4,8 @@ Discord Webhook Bot via AWS Lambda Function on Python 3.8+ runtime. Must be depl
 
 ## Dependencies
 
+- AWS Account
+- AWS CLI v2
 - Python 3.8+
 - requests
 - python-dotenv
